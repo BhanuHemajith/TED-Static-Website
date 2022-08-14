@@ -1,0 +1,412 @@
+DWTEDAuthController.prototype = new WRDBInterface();
+
+function DWTEDAuthController(apiUrl, pageUrl) {
+  WRDBInterface.apply(this, arguments);
+  this.id = 'ted_auth';  
+  this.urls = {
+    "api": apiUrl,
+    "authorize": apiUrl + "/authorize/request",
+    "page" : pageUrl,
+    "getProfile": apiUrl + "/profile/getProfile.php",
+    "generateAccessToken": apiUrl + "/profile/generateAccessToken.php"
+  };
+  this.sessionStorage = new DWLocalStorage(this.id, false);
+  this.localStorage = new DWLocalStorage(this.id, true);
+  this.APIToken = 'PgMkVQNPu1liwbUC';
+  this.accessToken = null;
+  this.profile = null;
+  this.sessionId = null;
+  this.profileVersion = 3;
+  this.videos = {};
+
+  var pThis = this;
+  window.addEventListener('ASSETS_LOADED', function(e) {
+    console.log('ASSETS LOADED');
+    pThis.loadProfile();
+    DWTEDAuthController.setMixpanelCampaignParams();
+    pThis.sendMixPanelScreenViewEvent();
+  });
+
+  window.addEventListener('PROFILE_LOADED', function(e) {
+    console.log('PROFILE LOADED', e.profile);
+  });
+
+  this.initialize();
+}
+
+DWTEDAuthController.prototype.initialize = function() {
+  //console.log('auth initialize');
+  var tedSession = DWTEDAuthController.getCookie('ted_session');
+  //console.log('ted_session', tedSession);
+  if (tedSession != null) {
+    //console.log('TED Session Found');
+    //user logged into TED
+    var localTEDSession = this.localStorage.getValue('TEDSession');
+    var accessToken = this.localStorage.getValue('TEDAccessToken');
+    if ((accessToken == null) || (tedSession !== localTEDSession)) {
+      this.localStorage.setValue('TEDProfileLoaded', this.profileVersion);
+      //console.log('No access token or sessions do not match');
+      //creds don't match, check for URL access code
+      var accessCode = WRUtil.getQueryStringValue('accessCode',this.urls.page);
+      var sid = WRUtil.getQueryStringValue('sid',this.urls.page);
+      if ((accessCode != null) && (sid != null)) {
+        //console.log('Got access code, get token');
+        this.localStorage.setValue('TEDLoginInitiated', false);
+        //have code - need to refresh access token
+        this.sendRequest(this.urls['generateAccessToken'],[['TEDSession',encodeURIComponent(tedSession)],['accessCode',accessCode],['sid',sid]], this, function(caller, result) {
+          if ((result != null) && (result.success)) {
+            //set access token
+            caller.accessToken = result.response.accessToken;
+            caller.localStorage.setValue('TEDSession', tedSession);
+            caller.localStorage.setValue('TEDAccessToken', caller.accessToken);
+            caller.localStorage.setValue('TEDShowCart', result.response.showCart);
+            location.href=caller.urls.page.split("?")[0];
+          }
+        });
+      }
+      else {
+        if (this.localStorage.getValue('TEDLoginInitiated') != true) {
+          //TED cookie is set, so try to do one autologin
+          //console.log('initiate login');
+          this.localStorage.setValue('TEDLoginInitiated', true);
+          this.localStorage.setValue('TEDSession', null);
+          this.localStorage.setValue('TEDAccessToken', null);
+          //user is logged, but no access code - need to run login workflow
+          this.login();
+        }
+        else {
+          //tried an auto login and it failed, so stop, reset auth data and stay logged out
+          //console.log('not logged in - but already tried to login and failed');
+          this.localStorage.setValue('TEDLoginInitiated', false);
+          this.localStorage.setValue('TEDSession', null);
+          this.localStorage.setValue('TEDAccessToken', null);
+        }
+      }
+    }
+  }
+};
+
+DWTEDAuthController.prototype.loadProfile = function() {
+  //console.log('load profile');
+  //check for TED Session
+  var tedSession = DWTEDAuthController.getCookie('ted_session');
+  var localTEDSession = this.localStorage.getValue('TEDSession');
+  var accessToken = this.localStorage.getValue('TEDAccessToken');
+  if ((tedSession != null) && (accessToken != null) && (tedSession === localTEDSession)) {
+    //user logged into TED and has valid accessToken - load profile
+    this.accessToken = accessToken;
+    this.sessionId = tedSession;
+    this.profile = null;
+    //console.log('logged in');
+    this.setProfile(this.sessionId);
+  }
+  else {
+    this.profile = null;
+    this.localStorage.removeStorage();
+    //this.localStorage.setValue('TEDProfileLoaded', this.profileVersion);
+    //console.log('not logged in');
+    this.profileLoaded();
+  }
+};
+
+DWTEDAuthController.prototype.profileLoaded = function() {
+  this.dispatch('PROFILE_LOADED', this.profile);
+  var event = new Event('PROFILE_LOADED');
+  event.profile = this.profile;
+  window.dispatchEvent(event);
+};
+
+DWTEDAuthController.prototype.setProfile = function(sessionId, method) {
+  this.profile = null;
+  if ((sessionId != null) && (sessionId == this.localStorage.getValue('TEDSession'))) {
+    var showCart = (this.localStorage.getValue('TEDShowCart') == true);
+    this.localStorage.setValue('TEDShowCart',false);
+    //console.log(this.localStorage.getValue('TEDProfileLoaded'), this.profileVersion);
+    if ((this.localStorage.getValue('TEDProfileLoaded') != this.profileVersion) || (this.localStorage.getValue('TEDProfileId') == null)) {
+      this.sendRequest(this.urls['getProfile'], [], this, function(caller, result) {
+        //console.log(result);
+        if (result.success) {
+          var data = result.response.data.viewer;
+          if (data.avatar.url != null) {
+            //need to preface pi.tedcdn.com/r/ before s3.amazonaws.com
+            //https://s3.amazonaws.com/ted.conferences.profiles/00/00/16/ca/cd/1493709.jpeg TO
+            //https://pi.tedcdn.com/r/s3.amazonaws.com/ted.conferences.profiles/00/00/16/ca/cd/1493709.jpeg
+            data.avatar.url = WRUtil.replaceText('https://s3.amazonaws.com/','https://pi.tedcdn.com/r/s3.amazonaws.com/',data.avatar.url);
+          }
+          caller.profile = {
+            id: data.id,
+            email: data.primaryEmailAddress,
+            name: data.name.full,
+            firstName: data.name.first,
+            lastName: data.name.last,
+            avatar: data.avatar.url != null ? data.avatar.url : data.avatar.generatedUrl,
+            isMember: data.isMember,
+            showCart: showCart
+          };
+          caller.localStorage.setValue('TEDProfileId', caller.profile.id);
+          caller.localStorage.setValue('TEDProfileEmail', caller.profile.email);
+          caller.localStorage.setValue('TEDProfileFirstName', caller.profile.firstName);
+          caller.localStorage.setValue('TEDProfileLastName', caller.profile.lastName);
+          caller.localStorage.setValue('TEDProfileName', caller.profile.name);
+          caller.localStorage.setValue('TEDProfileAvatar', caller.profile.avatar);
+          caller.localStorage.setValue('TEDProfileIsMember', caller.profile.isMember);
+          caller.localStorage.setValue('TEDProfileLoaded', caller.profileVersion);
+          if (method != null) {
+            method(caller.profile);
+          }
+          caller.profileLoaded();
+        }
+      });
+    }
+    else {
+      this.localStorage.setValue('TEDProfileLoaded', this.profileVersion);
+      this.profile = {
+        id: this.localStorage.getValue('TEDProfileId'),
+        email: this.localStorage.getValue('TEDProfileEmail'),
+        name: this.localStorage.getValue('TEDProfileName'),
+        firstName: this.localStorage.getValue('TEDProfileFirstName'),
+        lastName: this.localStorage.getValue('TEDProfileLastName'),
+        avatar: this.localStorage.getValue('TEDProfileAvatar'),
+        isMember: this.localStorage.getValue('TEDProfileIsMember'),
+        showCart: showCart
+      };
+      this.profileLoaded();
+    }
+  }
+};
+
+DWTEDAuthController.prototype.setSessionId = function(sessionId) {
+  this.localStorage.setValue('TEDSession', sessionId);
+};
+
+DWTEDAuthController.prototype.getSessionId = function() {
+  //get auth cookie
+  var sessionId = DWTEDAuthController.getCookie('ted_session');
+  var savedId = this.localStorage.getValue('TEDSession');
+  if ((sessionId == null) || (savedId != sessionId)) {
+    //logged out or session ID has changed - need to clear profile session data
+    this.localStorage.setValue('TEDProfileLoaded', false);
+  }
+  this.localStorage.setValue('TEDSession', sessionId);
+  return sessionId;  
+};
+
+DWTEDAuthController.prototype.login = function(showCart) {
+  var returnUrl = this.urls.page.split("?")[0];
+  if (showCart == null) {
+    showCart = false;
+  }
+  //console.log('login', this.urls.authorize + '?apiToken=' + this.token + "&siteUrl=" + encodeURIComponent(returnUrl));
+  location.href = this.urls.authorize + '?apiToken=' + this.APIToken + "&siteUrl=" + encodeURIComponent(returnUrl) + "&showCart="+showCart;
+};
+
+DWTEDAuthController.getCookie = function(name) {
+  var start = document.cookie.indexOf(name + "=");
+  var len = start + name.length + 1;
+  if ((!start) && (name != document.cookie.substring(0, name.length))) {
+    return null;
+  }
+  if (start == -1) return null;
+  var end = document.cookie.indexOf(';', len);
+  if (end == -1) end = document.cookie.length;
+  return document.cookie.substring(len, end);
+};
+
+DWTEDAuthController.prototype.sendRequest = function(url,params,caller,handler) {
+
+  var xmlHttp = DWTEDAuthController.getXmlHttp();
+  xmlHttp.onreadystatechange = function() {
+    if (xmlHttp.readyState == 4) {
+      //console.log("response", xmlHttp.responseText);
+      
+      var result = JSON.parse(decodeURIComponent(xmlHttp.responseText));
+      //console.log(result);
+      if (result == null) {
+        result = {
+          success: false,
+          error: 'unknown'
+        };
+      }
+      handler(caller, result);
+      
+    }
+    else  {
+      //statusTxt += ".";
+      //updateStatus(statusTxt);
+    }
+  };
+
+  if (params == null) {
+    params = [];
+  }
+  params.push(["apiToken",this.APIToken]);
+  if ((this.accessToken != null) && (this.sessionId != null)) {
+    params.push(["TEDSession", encodeURIComponent(this.sessionId)]);
+    params.push(["accessToken", this.accessToken]);
+  }
+  for (var p in params) {
+    params[p] = params[p].join("=");
+  }
+  var qs = params.join("&");
+  if (qs != null) {
+    //console.log(url, qs);
+    xmlHttp.open('POST', url, true);
+    xmlHttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    //xmlHttp.setRequestHeader("Content-length", params.length);
+    //xmlHttp.setRequestHeader("Connection", "close");
+    //alert(params);
+    xmlHttp.send(qs);
+  }
+  else {
+    console.log("ERROR","JSON invalid");
+  }
+  
+};
+
+DWTEDAuthController.prototype.sendMixPanelVideoEvent = function(event,data,videoTitle) {
+  //console.log(event, videoTitle);
+  if ((event) && (data) && (videoTitle) && (mixpanel)) {
+    var video = this.videos[videoTitle];
+    if (video == null) {
+      this.videos[videoTitle] = {
+        title: videoTitle,
+        playing: false,
+        complete: false
+      };
+    }
+    var mixpanelEvent = null;
+    var mixpanelData = {
+      'talk_slug': videoTitle,
+      'product': 'courses.ted.com',
+      'video_duration': Math.floor(data.duration)
+    };
+    var sendEvent = true;
+    switch (event) {
+      case 'play':
+        this.videos[videoTitle].playing = true;
+        mixpanelEvent = 'player_start';
+      break;
+      case 'pause':
+        mixpanelEvent = 'player_paused';
+        mixpanelData.action_time = Math.floor(data.seconds);
+      break;
+      case 'ended':
+        mixpanelEvent = 'player_complete';
+        this.videos[videoTitle].complete = true;
+      break;
+      case 'timeupdate':
+        if (!this.videos[videoTitle].playing) {
+          mixpanelEvent = 'player_start';
+          this.videos[videoTitle].playing = true;
+        } else if ((data.percent >= 0.95) && (!this.videos[videoTitle].complete)) {
+          mixpanelEvent = 'player_complete';
+          this.videos[videoTitle].complete = true;
+        }
+        else {
+          sendEvent = false;
+        }
+      break;
+    }
+    if ((sendEvent) && (mixpanelEvent != null)) {
+      //console.log(mixpanelEvent, mixpanelData);
+      mixpanel.track(mixpanelEvent, mixpanelData);
+    }
+  }
+};
+
+DWTEDAuthController.prototype.sendMixPanelComponentEvent = function(name, navContext) {
+  console.log('component link call', name);
+  if ((name) && (mixpanel)) {
+    var mixpanelData = {
+      'component': name,
+      'product': 'courses.ted.com'
+    };
+    console.log('component_click', mixpanelData);
+    mixpanel.track('component_click', mixpanelData);
+    if (navContext == '') {
+      navContext = null;
+    }
+    if (navContext == null) {
+      navContext = name;
+    }
+    if (navContext) {
+      this.sessionStorage.setValue('navigationContext', navContext);
+      this.sessionStorage.setValue('navigationContextSet', (new Date()).getTime());
+    }
+  }
+};
+
+DWTEDAuthController.prototype.sendMixPanelScreenViewEvent = function() {    
+  if (mixpanel) {
+    var mixpanelData = {
+      'product': 'courses.ted.com',
+      'talk_slug': $('head title').text()
+    };
+    var navContext = this.sessionStorage.getValue('navigationContext');
+    var navContextSet = this.sessionStorage.getValue('navigationContextSet');
+    console.log('navigation context', navContext);
+    if ((navContextSet != this.sessionStorage.getValue('navigationContextRetrieved')) && (navContext != null)) {
+      mixpanelData.navigation_context = navContext;
+      this.sessionStorage.setValue('navigationContextRetrieved', navContextSet);
+    }
+    console.log('screen_view', mixpanelData);
+    mixpanel.track('screen_view', mixpanelData);
+  }
+};
+
+DWTEDAuthController.getQueryParam = function(url, param) {
+  // Expects a raw URL
+  param = param.replace(/[[]/, "\[").replace(/[]]/, "\]");
+  var regexS = "[\?&]" + param + "=([^&#]*)",
+      regex = new RegExp( regexS ),
+      results = regex.exec(url);
+  if (results === null || (results && typeof(results[1]) !== 'string' && results[1].length)) {
+    return '';
+  } else {
+    return decodeURIComponent(results[1]).replace(/\W/gi, ' ');
+  }
+};
+
+DWTEDAuthController.setMixpanelCampaignParams = function() {
+  var campaign_keywords = 'utm_source utm_medium utm_campaign utm_content utm_term'.split(' ')
+      , kw = ''
+      , params = {}
+      , first_params = {};
+  var index;
+  for (index = 0; index < campaign_keywords.length; ++index) {
+    kw = DWTEDAuthController.getQueryParam(document.URL, campaign_keywords[index]);
+    if (kw.length) {
+      params[campaign_keywords[index] + ' [last touch]'] = kw;
+    }
+  }
+  for (index = 0; index < campaign_keywords.length; ++index) {
+    kw = DWTEDAuthController.getQueryParam(document.URL, campaign_keywords[index]);
+    if (kw.length) {
+      first_params[campaign_keywords[index] + ' [first touch]'] = kw;
+    }
+  }
+  //console.log('mixpanel params', params);
+  //console.log('mixpanel first params', first_params);
+  if (mixpanel) {
+    mixpanel.people.set(params);
+    mixpanel.people.set_once(first_params);
+    mixpanel.register(params);
+  }  
+};
+
+DWTEDAuthController.getPageUrl = function() {
+  return location.href.split('?')[0];
+};
+
+try {
+  Object.assign(DWTEDAuthController, WRDBInterface);
+}
+catch(e) {
+  objCopy(DWTEDAuthController, WRDBInterface);
+}
+
+var dwTEDAuthController = new DWTEDAuthController(apiUrl,location.href);
+
+  
+
+

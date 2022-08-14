@@ -1,0 +1,109 @@
+DWMailChimpController.prototype = new WRDBInterface();
+
+function DWMailChimpController(apiUrl, authController) {
+  WRDBInterface.apply(this, arguments);
+  this.urls = {
+    "setContact": apiUrl + "/mailchimp/setContact.php"
+  };
+  this.authController = authController;
+}
+
+try {
+  Object.assign(DWMailChimpController, WRDBInterface);
+}
+catch(e) {
+  objCopy(DWMailChimpController, WRDBInterface);
+}
+
+DWMailChimpController.prototype.saveUser = function(userData, method) {
+  /*
+  this.sendRequest(this.urls['getUser'],[["email",email]],this,function(pThis, result){
+    console.log('get user', result);
+  });
+  */
+  if ((userData != null) && (userData.email) != null) {
+    if (mixpanel) { 
+      mixpanel.track('form_submit', {
+        'product': 'courses.ted.com',
+        'form_name': 'email_subscribe_form',
+        '$email': userData.email,
+        '$name': userData.first_name + ' ' + userData.last_name
+      });
+    }
+    var params = [
+      ['email', userData.email]
+    ]
+    if (userData.first_name != null) {
+      params.push(['first_name', userData.first_name]);
+    }
+    if (userData.last_name != null) {
+      params.push(['last_name', userData.last_name]);
+    }
+    if ((this.authController != null) && (this.authController.profile != null)) {
+      //add custom fields
+      if (this.authController.profile.id != null) {
+        params.push(['ted_id', this.authController.profile.id]);
+      }
+      if (this.authController.profile.isMember != null) {
+        params.push(['is_member', (this.authController.profile.isMember) ? 'true' : 'false']);
+      }
+    }
+    this.sendRequest(this.urls.setContact,params,this,function(pThis, result){
+      //console.log(result);
+      if (method) {
+        method(result);
+      }    
+    });
+  }
+};
+
+DWMailChimpController.prototype.sendRequest = function(url,params,caller,handler) {
+  var xmlHttp = DWMailChimpController.getXmlHttp();
+  xmlHttp.onreadystatechange = function() {
+    if (xmlHttp.readyState == 4) {
+      //console.log("response", xmlHttp.responseText);
+      
+      var result = JSON.parse(decodeURIComponent(xmlHttp.responseText));
+      //console.log(result);
+      if (result == null) {
+        result = {
+          success: false,
+          error: 'unknown'
+        };
+      }
+      handler(caller, result);
+    }
+    else  {
+      //statusTxt += ".";
+      //updateStatus(statusTxt);
+    }
+  };
+
+  if (params == null) {
+    params = [];
+  }
+  params.push(["apiToken",this.authController.APIToken]);
+  if ((this.authController.accessToken != null) && (this.authController.sessionId != null)) {
+    params.push(["TEDSession", encodeURIComponent(this.authController.sessionId)]);
+    params.push(["accessToken", this.authController.accessToken]);
+  }
+  for (var p in params) {
+    params[p] = params[p].join("=");
+  }
+  var qs = params.join("&");
+  if (qs != null) {
+    //console.log(qs);
+    xmlHttp.open('POST', url, true);
+    xmlHttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    //xmlHttp.setRequestHeader("Content-length", params.length);
+    //xmlHttp.setRequestHeader("Connection", "close");
+    //alert(params);
+    xmlHttp.send(qs);
+  }
+  else {
+    console.log("ERROR","JSON invalid");
+  }
+  
+};
+
+var dwMailChimpController = new DWMailChimpController(apiUrl, dwTEDAuthController);

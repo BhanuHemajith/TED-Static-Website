@@ -1,0 +1,86 @@
+function loadAsset(asset, method) {
+  var element;
+  var src = asset.src;
+  if (asset.bustCache) {
+    src += "?" + (new Date()).getTime();
+  }
+  if (asset.type === "css") {
+    element = document.createElement("link");
+  }
+  else {
+    element = document.createElement("script");
+  }
+  element.onload = function() {
+    if (method) {
+      method(element);
+    }
+  }
+  if (asset.type === "css") {
+    element.setAttribute("rel", "stylesheet");
+    element.setAttribute("href", src);
+  }
+  else {
+    element.setAttribute("src", src);
+  }
+  document.head.appendChild(element);
+}
+
+function loadJQuery(method) {
+  loadAsset({ type: "js", src: apiUrl + "/assets/lib/jquery-3.6.0.min.js", bustCache: false }, function(el) {
+    if (method) {
+      method(el);
+    }
+  });
+}
+
+function loadWR(method) {
+  loadAsset({ type: "js", src: apiUrl + "/assets/lib/wakerunner-0.2.1.js", bustCache: false }, function(el) {
+    if (method) {
+      method(el);
+    }
+  });
+}
+
+function init(assetIndex) {
+  //page loaded with dependencies, load assets
+  if (assetIndex == null) {
+    assetIndex = 0;
+  }
+  if ((assets != null) && (assets.length > 0) && (assets.length > assetIndex) && (assetIndex >= 0)) {
+    loadAsset(assets[assetIndex], function(e) {
+      //console.log('assetLoaded', e, assetIndex);
+      init(assetIndex+1);
+    });
+  }
+  else {
+    window.dispatchEvent(new Event('ASSETS_LOADED'));
+  }
+}
+
+var apiUrl = 'https://ted.digiwake.net';
+var assets = [
+  { type: "js", src: apiUrl + "/assets/lib/md5.js", bustCache: false },
+  { type: "js", src: apiUrl + "/assets/js/DWLocalStorage.js?1", bustCache: false },
+  { type: "js", src: apiUrl + "/assets/js/DWTEDAuthController.js", bustCache: true },
+  { type: "js", src: apiUrl + "/assets/js/DWMailChimpController.js?3", bustCache: false },
+  { type: "js", src: apiUrl + "/assets/js/DWAirtableController.js?1", bustCache: false },
+  { type: "js", src: apiUrl + "/assets/js/frontend-script.js", bustCache: true }
+];
+
+window.onload = function(e) {
+  if (!window.jQuery) {
+    loadJQuery(function(){
+      if (!window.WRUtil) {
+        loadWR(function() { init(); });
+      }
+    });
+  }
+  else if (!window.WRUtil) {
+    loadWR(function() { init(); });
+  }
+  else {
+    init();
+  }
+};
+
+

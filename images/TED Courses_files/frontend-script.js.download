@@ -1,0 +1,349 @@
+var accordion = (function(){
+  
+  var $accordion = $('.js-accordion');
+  var $accordion_header = $accordion.find('.js-accordion-header');
+  var $accordion_item = $('.js-accordion-item');
+ 
+  // default settings 
+  var settings = {
+    // animation speed
+    speed: 400,
+    
+    // close all other accordion items if true
+    oneOpen: true,
+  };
+    
+  return {
+    // pass configurable object literal
+    init: function($settings) {
+      $accordion_header.on('click', function() {
+        if ($(this).closest('.accordion__item').hasClass('disabled')) {
+          return;
+        }
+        accordion.toggle($(this));
+      });
+      
+      $.extend(settings, $settings); 
+      
+      // ensure only one accordion is active if oneOpen is true
+      if(settings.oneOpen && $('.js-accordion-item.active').length > 1) {
+        $('.js-accordion-item.active:not(:first)').removeClass('active');
+      }
+      
+      // reveal the active accordion bodies
+      $('.js-accordion-item.active').removeClass('active');
+      $('.js-accordion-item.disabled').find('> .js-accordion-body').show();
+    },
+    toggle: function($this) {
+            
+      if(settings.oneOpen && $this[0] != $this.closest('.js-accordion').find('> .js-accordion-item.active > .js-accordion-header')[0]) {
+        $this.closest('.js-accordion')
+               .find('> .js-accordion-item') 
+               .removeClass('active')
+               .find('.js-accordion-body')
+               .slideUp()
+      }
+      
+      // show/hide the clicked accordion item
+      $this.closest('.js-accordion-item').toggleClass('active');
+      $this.next().stop().slideToggle(settings.speed);
+    }
+  }
+})();
+
+
+
+$(document).ready(function(){
+  accordion.init({ speed: 300, oneOpen: true });
+  
+  $('#side-nav-toggler').html('<i class="fas fa-bars"></i>');
+  $('#side-nav-toggler').click(function(e) {
+    e.preventDefault();
+    $('body').toggleClass('left-nav-active');
+  });
+  $(document).on('click', '.page-wrapper', function(e) {
+    $('body').removeClass('left-nav-active');
+  });
+});
+
+
+/////////////////////////////// rnd.02 //////////////////////////////
+
+$.urlParam = function(name, url) {
+    if (!url) {
+     url = window.location.href;
+    }
+    var results = new RegExp('[\\?&]' + name + '=([^&#]*)').exec(url);
+    if (!results) {
+        return undefined;
+    }
+    return results[1] || undefined;
+}
+
+$(document).on('click', '.js-trigger-cart', function(e) {
+  e.preventDefault();
+  $('#cart_button').get(0).click();
+});
+
+// $(window).scroll(function() {
+//   var scrollPercentage = 100 * $(window).scrollTop() / ($(document).height() - $(window).height());
+//   var milestone = scrollPercentage >= 90 ? 90 : scrollPercentage >= 50 ? 50 : scrollPercentage >= 25 ? 25 : 0;
+//   if (mixpanel) {
+//     if (!window.scrollMilestone) {
+//       window.scrollMilestone = {
+//         0: false,
+//         25: false,
+//         50: false,
+//         90: false
+//       }
+//     }
+//     if (window.scrollMilestone[milestone] === false) {
+//       mixpanel.track('page_scroll', {
+//         'Page Title': $('title').text(),
+//         'Scroll Depth': milestone
+//       });
+//       window.scrollMilestone[milestone] = true;
+//     }
+//   }
+// });
+
+jQuery(document).ready(function($) {
+
+  /***************** Mix panel Integration ************************/
+  $('#wf-form-Contact-Form').submit(function(e) {
+    if (mixpanel) {
+      mixpanel.track('form_submit', {
+        'product': 'courses.ted.com',
+        '$email': $('#contact_email').val(),
+        'form_name': 'Contact Us'
+      });
+    }
+  });
+  $("a[href^='http']").click(function() {
+    var $this = $(this);
+    if (mixpanel) {
+      mixpanel.track('outbound_link_click', {
+        'product': 'courses.ted.com',
+        'outbound_link_context': $this.text(),
+        'outbound_url': $this.attr('href')
+      });
+    }
+  });
+
+  // if (mixpanel) {
+  //   mixpanel.track('screen_view', {
+  //     'product': 'courses.ted.com',
+  //     'talk_slug': $('head title').text(),
+  //     'navigation_context': decodeURI($.urlParam('navigation_context') || '')
+  //   });
+  // }
+  // $('.js-homepage-courses-list .course-grid-link-item').click(function() {
+  //   var course_title = $(this).find('.js-homepage-courses-list-course-name').text();
+  //   var position = $(this).closest('[role="listitem"]').index();
+  //   if (mixpanel) {
+  //     mixpanel.track('Homepage Course Card Click', {
+  //       'Course Name': course_title,
+  //       'Position of course in list': position+1
+  //     });
+  //   }
+  // });
+  // $('.js-header-product-list-item').click(function() {
+  //   var $this = $(this);
+  //   if (mixpanel) {
+  //     mixpanel.track('Product Click / Detail View', {
+  //       'Course Name': $this.text(),
+  //       'Position of course in list': $this.closest('.dropdown-menu-item-wrap').index()+1,
+  //       'Click From': 'Header browse dropdown menu'
+  //     });
+  //   }
+  // });
+  // $('.collection-product-link').click(function() {
+  //   var $this = $(this);
+  //   if (mixpanel) {
+  //     mixpanel.track('Product Click / Detail View', {
+  //       'Course Name': $this.find('.collection-product-name').text(),
+  //       'Position of course in list': $this.closest('.product-collection-item').index()+1,
+  //       'Click From': 'Enroll Page'
+  //     });
+  //   }
+  // });
+  // $('.js-continue-to-checkout').click(function() {
+  //   if (mixpanel) {
+  //     mixpanel.track('Continue to Checkout', {
+  //     });
+  //   }
+  // });
+  // $('.cart-product-remove').click(function() {
+  //   var $this = $(this);
+  //   if (mixpanel) {
+  //     mixpanel.track('Remove From Cart', {
+  //       'Course Name': $this.closest('.w-commerce-commercecartitem').find('.cart-product-title .w-commerce-commercecartproductname').text()
+  //     });
+  //   }
+  // });
+  // $('.js-enroll-page-collection .product-collection-item .w-commerce-commerceaddtocartbutton').click(function() {
+  //   var $this = $(this);
+  //   if (mixpanel) {
+  //     mixpanel.track('Add to Cart', {
+  //       'Course Name': $this.closest('.product-collection-item').find('.collection-product-name').text(),
+  //       'Click From': 'Enroll Page'
+  //     });
+  //   }
+  // });
+  // $('#product-popup .w-commerce-commerceaddtocartbutton').click(function() {
+  //   var $this = $(this);
+  //   if (mixpanel) {
+  //     mixpanel.track('Add to Cart', {
+  //       'Course Name': $this.closest('#product-popup').find('.product-popup-product-name').text(),
+  //       'Click From': 'Product Detail Page'
+  //     });
+  //   }
+  // });
+  // $('.js-home-enroll-button').click(function() {
+  //   var $this = $(this);
+  //   if (mixpanel) {
+  //     mixpanel.track('Enroll Button Click', {
+  //       'Click From': 'Home Page'
+  //     });
+  //   }
+  // });
+  // $('.js-header-enroll-button').click(function() {
+  //   var $this = $(this);
+  //   if (mixpanel) {
+  //     mixpanel.track('Enroll Button Click', {
+  //       'Click From': 'Header Navigation Bar'
+  //     });
+  //   }
+  // });
+  // $('[data-component]').click(function() {
+  //   var $this = $(this);
+  //   if (mixpanel) {
+  //     mixpanel.track('form_submit', {
+  //       'product': 'courses.ted.com',
+  //       'compoment': $this.data('compoment'),
+  //       'compoment_id': $this.data('compoment') || ''
+  //     });
+  //   }
+  // });
+
+  // $('a[data-navigation_context]').each(function() {
+  //   var navigation_context = $(this).data('navigation_context');
+  //   $(this).attr('href', $(this).attr('href') + '?navigation_context=' + navigation_context);
+  // });
+  // $('header .header-logo-link').attr('href', $('header .header-logo-link').attr('href') + '?navigation_context=Header:Logo');
+  // $('.js-header-enroll-button').attr('href', $('.js-header-enroll-button').attr('href') + '?navigation_context=Header:Enroll');
+  // $('.js-header-product-list-item').each(function() {
+  //   $(this).attr('href', $(this).attr('href') + '?navigation_context=Header:Browse:' + $(this).text());
+  // });
+  // $('.site-footer-new .header-logo-link').attr('href', $('.site-footer-new .header-logo-link').attr('href') + '?navigation_context=Footer:Logo');
+  /****************************************************************/
+
+  var today = new Date();
+  $('.starting-date-field option').each(function() {
+    if ($(this).val()) {
+      var target_date = new Date($(this).text() + ' GMT');
+      target_date -= 60*1000; // go back 1 minute, 11:59 PM
+      target_date -= 4*24*60*60*1000; // go back 4 days
+      target_date = new Date(target_date);
+      if (today > target_date) {
+        $(this).addClass('starting-date-invalid-value');
+      }
+    }
+  });
+  // $('.starting-date-invalid-value').prop('disabled', true);
+  $('.starting-date-invalid-value').remove();
+
+  $('.signout-link').attr('href', 'https://auth.ted.com/session/logout?referer=' + location.href);
+
+  $('.js-custom-popup').click(function(e) {
+    e.preventDefault();
+    var popup_src = $(this).data('href');
+    const fancybox = new Fancybox([{src:popup_src}]);
+  });
+});
+
+window.addEventListener('ASSETS_LOADED', function(e) {
+  $('.js-login-button').click(function(e) {
+    e.preventDefault();
+    dwTEDAuthController.login();
+  });
+
+  $('[data-component]').click(function() {
+    var $this = $(this);
+    dwTEDAuthController.sendMixPanelComponentEvent($this.data('component'));
+  });
+  $('.js-home-enroll-button').click(function() {
+    dwTEDAuthController.sendMixPanelComponentEvent('Enroll button : Homepage');
+  });
+  $('.js-header-enroll-button').click(function() {
+    dwTEDAuthController.sendMixPanelComponentEvent('Enroll button : Header');
+  });
+  $('.js-homepage-courses-list .course-grid-link-item').click(function() {
+    var course_title = $(this).find('.js-homepage-courses-list-course-name').text();
+    var position = $(this).closest('[role="listitem"]').index();
+    dwTEDAuthController.sendMixPanelComponentEvent('Course card : Homepage : ' + course_title);
+  });
+  $('.js-header-product-list-item').click(function() {
+    var $this = $(this);
+    dwTEDAuthController.sendMixPanelComponentEvent('Browse dropdown : ' + $this.text());
+  });
+  $('.collection-product-link').click(function() {
+    var $this = $(this);
+    dwTEDAuthController.sendMixPanelComponentEvent('Enroll page course : ' + $this.find('.collection-product-name').text());
+  });
+  $('.js-continue-to-checkout').click(function() {
+    dwTEDAuthController.sendMixPanelComponentEvent('Continue to checkout');
+  });
+  $('.cart-product-remove').click(function() {
+    var $this = $(this);
+    dwTEDAuthController.sendMixPanelComponentEvent('Remove from cart : ' + $this.closest('.w-commerce-commercecartitem').find('.cart-product-title .w-commerce-commercecartproductname').text());
+  });
+  $('.js-enroll-page-collection .product-collection-item .w-commerce-commerceaddtocartbutton').click(function() {
+    var $this = $(this);
+    dwTEDAuthController.sendMixPanelComponentEvent('Add to cart : ' + $this.closest('.product-collection-item').find('.collection-product-name').text());
+  });
+  $('#product-popup .w-commerce-commerceaddtocartbutton').click(function() {
+    var $this = $(this);
+    dwTEDAuthController.sendMixPanelComponentEvent('Add to cart : Popup : ' + $this.closest('#product-popup').find('.product-popup-product-name').text());
+  });
+  $('.js-product-buy-popup').click(function() {
+    dwTEDAuthController.sendMixPanelComponentEvent('Enroll today button');
+  });
+});
+
+//check for login and get profile
+window.addEventListener('PROFILE_LOADED', function(e) {
+  var profile = e.profile;
+  if (profile != null) {
+    $('body').addClass('user-logged-in');
+    if (profile.isMember) {
+      $('body').addClass('membership-user');
+    } else {
+      $('.show-member-only').remove();
+    }
+    $('.user-avatar-name-wrapper').attr({
+      title: profile.name
+    });
+    $('.user-avatar').attr({
+      src: profile.avatar,
+      alt: profile.name
+    });
+    $('.user-name').text(profile.name);
+    $('.user-avatar').removeAttr('srcset');
+    if (profile.showCart) {
+      $('#cart_button').get(0).click();
+    }
+
+    // if (mixpanel) {
+    //   mixpanel.track('TED Profile Login', {
+    //     'User Name': profile.name,
+    //     'User Email': profile.email,
+    //     'User ID': profile.id,
+    //     'isMember': profile.isMember ? 'Yes' : 'No'
+    //   });
+    // }
+
+  } else {
+    $('body').addClass('user-not-logged-in');    
+  }
+});

@@ -1,0 +1,1119 @@
+/*
+* wakerunner
+* v0.2.1 - 2018-06-25
+* Copyright 2015-2018 Digital Wake, LLC
+* 
+* Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* Dependencies:
+* WRViewer requires screenfull.js - https://github.com/sindresorhus/screenfull.js
+* WRViewer requires jQuery - https://jquery.com/
+*/
+
+WRController.prototype = new WREventDispatcher();
+
+function WRController() {
+  WREventDispatcher.apply(this, arguments);
+  this.version = "";
+  this.apiToken = "";
+  this.configFile = "data/config.xml";
+  this.viewer = new WRViewer(this);
+  this.model = new WRModel(this);
+  this.paths = {
+    dataFilePath: "",
+    dataFile: ""
+  };
+};
+
+WRController.prototype.initialize = function() {
+  this.viewer.initialize();
+
+  this.model.addEventListener("DATA_READY", this, function(pThis, evtObj) {
+
+  });
+
+  //load config file
+  if ((this.configFile != null) && (this.configFile != "")) {
+    var xmlDoc = WRUtil.loadXmlFile(this.configFile, true);
+    if (xmlDoc != null) {
+      this.paths.dataFilePath = WRUtil.getNodeTextContent(xmlDoc.getElementsByTagName("dataFilePath").item(0), "string", "");
+      this.paths.dataFile = WRUtil.getNodeTextContent(xmlDoc.getElementsByTagName("dataFile").item(0), "string", "");
+      if (this.paths.dataFile != "") {
+        this.model.dataFile = this.paths.dataFilePath + this.paths.dataFile;
+        this.model.initialize();
+      }
+    }
+  }
+};
+
+WRModel.prototype = new WREventDispatcher();
+
+function WRModel(p) {
+  WREventDispatcher.apply(this, arguments);
+  this.parent = p;
+  this.initialized = false;
+}
+
+WRModel.prototype.initialize = function() {
+  this.initialized = true;
+  return this.initialized;
+};
+
+WRViewer.prototype = new WREventDispatcher();
+
+function WRViewer(p) {
+  WREventDispatcher.apply(this, arguments);
+  this.parent = p;
+  this.components = {};
+  this.window = window;
+  this.document = document;
+  this.mode = "desktop";
+  this.fadeIn = 1000;
+  this.preloaderDelay = 750;
+}
+
+WRViewer.prototype.loadComponents = function(componentList) {
+  //set components
+  if ((componentList != null) && (componentList.length > 0)) {
+    for (var c=0; c<componentList.length; c++) {
+      this.components[componentList[c].id] = componentList[c];
+    }
+  }
+};
+
+WRViewer.prototype.initialize = function()  {
+  //nada
+};
+
+WRViewer.prototype.goFullScreen = function() {
+  if (screenfull.enabled) {
+    screenfull.request();
+  }
+};
+
+
+WRViewer.prototype.addComponent = function(elementObj)  {
+  if ((elementObj != null) && (elementObj.id != null)) {
+    this.components[elementObj.id] = elementObj;
+  }
+};
+
+WRViewer.prototype.enableComponentById = function(id, enable) {
+  this.enableComponent(this.components[id], enable);
+};
+
+WRViewer.prototype.enableComponent = function(uiElement, enable) {
+  if ((uiElement != null) && (uiElement.element != null)) {
+    uiElement.enabled = enable;
+    if (enable) {
+      $("#" + uiElement.element.id ).removeClass("disabled");
+    }
+    else {
+      $("#" + uiElement.element.id ).addClass("disabled");
+    }
+  }
+};
+
+WRViewer.prototype.getComponentEnabledById = function(id) {
+  var uiElement = this.components[id];
+  if ((uiElement != null) && (uiElement.element != null)) {
+    return uiElement.enabled;
+  }
+  return false;
+};
+
+
+WRViewer.prototype.getComponentValueById = function(id) {
+  return this.getComponentValue(this.components[id]);
+};
+
+WRViewer.prototype.getComponentValue = function(uiElement) {
+  var value = null;
+  if ((uiElement != null) && (uiElement.element)) {
+    value = uiElement.element.value;
+  }
+  return value;
+};
+
+WRViewer.prototype.setComponentValueById = function(id, value) {
+  this.setComponentValue(this.components[id], value);
+};
+
+WRViewer.prototype.setComponentValue = function(uiElement, value) {
+  if ((uiElement != null) && (uiElement.element)) {
+    uiElement.element.value = value;
+  }
+};
+
+WRViewer.prototype.getComponentTypeById = function(id) {
+  return this.getComponentType(this.components[id]);
+};
+
+WRViewer.prototype.getComponentType = function(uiElement) {
+  var type = null;
+  if ((uiElement != null) && (uiElement.element)) {
+    type = uiElement.element.type;
+  }
+  return type;
+};
+
+WRViewer.prototype.setComponentTypeById = function(id, type) {
+  this.setComponentType(this.components[id], type);
+};
+
+WRViewer.prototype.setComponentType = function(uiElement, type) {
+  if ((uiElement != null) && (uiElement.element)) {
+    uiElement.element.type = type;
+  }
+};
+
+WRViewer.prototype.getComponentVisibleById = function(uiElementId) {
+  var visible = false;
+  var uiElement = this.components[uiElementId];
+  if ((uiElement != null) && (uiElement.element != null)) {
+    if (uiElement.display != null) {
+      if (uiElement.element.style.display === uiElement.display) {
+        visible = (uiElement.element.style.display === uiElement.display);
+      }
+    }
+    if (uiElement.animate != null) {
+      visible = !uiElement.animate.hidden;
+    }
+  }
+  return visible;
+};
+
+WRViewer.prototype.setComponentText = function(uiElement, text) {
+  if ((uiElement != null) && (uiElement.element != null)) {
+    uiElement.element.innerHTML = text;
+  }
+};
+
+WRViewer.prototype.setComponentTextById = function(uiElementId, text) {
+  var uiElement = this.components[uiElementId];
+  if ((uiElement != null) && (uiElement.element != null)) {
+    this.setComponentText(uiElement, text);
+  }
+};
+
+WRViewer.prototype.turnOnComponent = function(uiElement, turnOn) {
+  if ((uiElement != null) && (uiElement.element != null)) {
+    if (!turnOn) {
+      $("#" + uiElement.element.id ).removeClass("on");
+    }
+    else {
+      $("#" + uiElement.element.id ).addClass("on");
+    }
+    uiElement.on = turnOn;
+  }
+};
+
+WRViewer.prototype.toggleComponentById = function(uiElementId) {
+  var uiElement = this.components[uiElementId];
+  if ((uiElement != null) && (uiElement.element != null)) {
+    this.toggleComponent(uiElement);
+  }
+};
+
+WRViewer.prototype.toggleComponent = function(uiElement) {
+  if ((uiElement != null) && (uiElement.element != null)) {
+    var show = true;
+    if (uiElement.display != null) {
+      if (uiElement.element.style.display === uiElement.display) {
+        show = !(uiElement.element.style.display === uiElement.display);
+      }
+    }
+    if (uiElement.animate != null) {
+      show = uiElement.animate.hidden;
+    }
+    this.showComponent(uiElement, show);
+  }
+};
+
+WRViewer.prototype.showComponentById = function(uiElementId, show) {
+  var uiElement = this.components[uiElementId];
+  if ((uiElement != null) && (uiElement.element != null)) {
+    this.showComponent(uiElement, show);
+  }
+};
+
+WRViewer.prototype.showComponent = function(uiElement, show) {
+  if ((uiElement != null) && (uiElement.element != null)) {
+    if ((uiElement.animate == null) && (uiElement.display != null)) {
+      if (show) {
+        this.setComponentDisplay(uiElement, uiElement.display);
+      }
+      else {
+        this.setComponentDisplay(uiElement, "none");
+      }
+    } else if (uiElement.animate != null) {
+      this.animateComponent(uiElement, show);
+    }
+  }
+};
+
+WRViewer.prototype.setComponentDisplay = function(uiElement, display) {
+  if ((uiElement != null) && (uiElement.element != null)) {
+    uiElement.element.style.display = display;
+  }
+};
+
+WRViewer.prototype.removeComponentChildrenById = function(id) {
+  this.removeComponentChildren(this.components[id]);
+};
+
+WRViewer.prototype.removeComponentChildren = function(uiElement) {
+  if ((uiElement != null) && (uiElement.element != null)) {
+    WRUtil.removeChildNodes(uiElement.element);
+  }
+};
+
+WRViewer.prototype.appendChildToComponentById = function(id, childNode) {
+  this.appendChildToComponent(this.components[id], childNode);
+};
+
+WRViewer.prototype.appendChildToComponent = function(uiElement, childNode) {
+  if ((uiElement != null) && (uiElement.element != null)) {
+    uiElement.element.appendChild(childNode);
+  }
+};
+
+WRViewer.prototype.setStyleById = function(id, style, value) {
+  this.setStyle(this.components[id], style, value);
+};
+
+WRViewer.prototype.setStyle = function(uiElement, style, value) {
+  if ((uiElement != null) && (uiElement.element != null) && (uiElement.element.style[style] != null)) {
+    uiElement.element.style[style] = value;
+  }
+};
+
+WRViewer.prototype.getBoundingClientRectById = function(id) {
+  return this.getBoundingClientRect(this.components[id]);
+};
+
+WRViewer.prototype.getBoundingClientRect = function(uiElement) {
+  if ((uiElement != null) && (uiElement.element != null)) {
+    return uiElement.element.getBoundingClientRect();
+  }
+  return null;
+};
+
+WRViewer.prototype.animateComponent = function(uiElement, show) {
+  var props = uiElement.animate.showProps;
+  var stateProps = uiElement.animate.shownProps;
+  if (!show) {
+    props = uiElement.animate.hideProps;
+    stateProps = uiElement.animate.hiddenProps;
+  }
+  //turn off overflow
+  if (!this.hasOverflow()) {
+    $('body').css('overflow-y', 'hidden');
+  }
+  //make sure element is visible
+  if (uiElement.display != null) {
+    this.setComponentDisplay(uiElement, uiElement.display);
+  }
+  var pThis = this;
+  $("#" + uiElement.element.id ).animate(
+    props,
+    uiElement.duration,
+    function() {
+      //if hiding and display is set, hide element
+      if ((!show) && (uiElement.display != null)) {
+        pThis.setComponentDisplay(uiElement, "none");
+      }
+      //turn overflow back on
+      $('body').css('overflow-y', 'auto');
+      //set state props
+      pThis.setCSSProps(stateProps);
+    }
+  );
+  uiElement.animate.hidden = !show;
+};
+
+WRViewer.prototype.setCSSProps = function(props) {
+  if (props != null) {
+    for (var s=0;s<props.length;s++) {
+      $(props[s].target).css(props[s].prop, props[s].value);
+    }
+  }
+};
+
+WRViewer.prototype.hasOverflow = function() {
+  var body = document.body;
+  var overflow = false;
+  if (body.offsetHeight < body.scrollHeight ||
+    body.offsetWidth < body.scrollWidth) {
+    overflow = true;
+  }
+  return overflow;
+}
+
+WRDBInterface.prototype = new WREventDispatcher();
+
+function WRDBInterface() {
+
+}
+
+WRDBInterface.send = function (url,params,async,caller,handler) {
+  if (async == null)  {
+    async = false;
+  }
+  if (params == null) {
+    params = "v2=" + WRDBInterface.getTime();
+  }
+  else {
+    params += "&v2=" + WRDBInterface.getTime();
+  }
+
+  var xmlHttp = WRDBInterface.getXmlHttp();
+  if (async)  {
+    xmlHttp.onreadystatechange = function() {
+      if (xmlHttp.readyState == 4) {
+        var success = (xmlHttp.responseText == "true");
+        var error = "";
+        if (!success) {
+          error = xmlHttp.responseText;
+        }
+        var responseObj = {
+          success: success,
+          error: error
+        };
+        handler(caller, responseObj);
+      }
+    };
+  }
+  xmlHttp.open("POST", url, async);
+  xmlHttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+  //xmlHttp.setRequestHeader("Content-length", params.length);
+  //xmlHttp.setRequestHeader("Connection", "close");
+  xmlHttp.send(params);
+  if (!async) {
+    var success = (xmlHttp.responseText == "true");
+    var error = "";
+    if (!success) {
+      error = xmlHttp.responseText;
+    }
+    var responseObj = {
+      success: success,
+      error: error
+    };
+    return responseObj;
+  }
+};
+
+WRDBInterface.getXML = function(url, params, caller, handler)  {
+  if (params == null) {
+    params = "v2=" + WRDBInterface.getTime();
+  }
+  else  {
+    params += "&v2=" + WRDBInterface.getTime();
+  }
+  params += "&userId="+WRDBInterface.getUserId()+"&apiToken="+WRDBInterface.getApiToken();
+  var xmlHttp = WRDBInterface.getXmlHttp();
+  xmlHttp.onreadystatechange = function() {
+    if (xmlHttp.readyState == 4) {
+      tmpData = WRUtil.createXmlDocFromString(xmlHttp.responseText);
+      handler(caller, tmpData);
+    }
+  };
+
+  xmlHttp.open("POST", url, true);
+  xmlHttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+  xmlHttp.send(params);
+};
+
+
+WRDBInterface.getXmlHttp = function() {
+  try {
+    var x = new XMLHttpRequest();
+  }
+  catch (e) {
+    var x = new ActiveXObject("Microsoft.XMLHTTP");
+  }
+  return x;
+};
+
+WRDBInterface.getTime = function()  {
+  var tmp = new Date();
+  return tmp.getTime();
+};
+
+WRDBInterface.getUserId = function()  {
+  var uId = "";
+  if (userId != null) {
+    uId = userId;
+  }
+  return uId;
+};
+
+WRDBInterface.getApiToken = function()  {
+  var token = "";
+  if (apiToken != null) {
+    token = apiToken;
+  }
+  return token;
+};
+
+function WREventDispatcher()  {
+  this.events = {};
+}
+
+WREventDispatcher.prototype.addEventListener = function(eventName,listener,method)  {
+  if (this.events[eventName] == null) {
+    this.events[eventName] = {
+      name: eventName,
+      listeners: {}
+    };
+  }
+  this.events[eventName].listeners[method] = {
+    id: WRUtil.getUUID(),
+    listener: listener,
+    method: method
+  };
+  return this.events[eventName].listeners[method].id;
+};
+
+WREventDispatcher.prototype.removeEventListener = function(eventName,method,id)  {
+  if ((this.events[eventName] != null) && (this.events[eventName].listeners != null)) {
+    if (method != null) {
+      this.events[eventName].listeners[method] = null;
+    }
+    else if (id != null) {
+      for (var e in this.events[eventName].listeners) {
+        if (this.events[eventName].listeners[e].id === id) {
+          this.events[eventName].listeners[e] = null;
+        }
+      }
+    }
+  }
+};
+
+WREventDispatcher.prototype.dispatch = function(eventName,eventObj)  {
+  if (this.events[eventName] != null) {
+    for (var m in this.events[eventName].listeners) {
+      if (this.events[eventName].listeners[m] != null)  {
+        this.events[eventName].listeners[m].method(this.events[eventName].listeners[m].listener,eventObj);
+      }
+    }
+  }
+};
+
+function WRUtil() {
+
+}
+
+/*---------------------STRING_UTILS-------------------*/
+WRUtil.replaceText = function(oldChars,newChars,str) {
+  for (i=0;i<str.length;i++)  {
+    curChars = str.substr(i,oldChars.length);
+    if (curChars == oldChars) {
+      str = str.substring(0,i) + newChars + str.substring(i+oldChars.length);
+    }
+  }
+  return str;
+};
+
+WRUtil.padZeros = function(number, numDigits) {
+  var zeros = "";
+  var numZeros = 0;
+  var i = 0;
+  number += "";
+  if (number.length < numDigits)	{
+    numZeros = numDigits - number.length;
+    for (i=0; i < numZeros; i++)	{
+      zeros += "0";
+    }
+  }
+  return zeros + number;
+};
+
+WRUtil.convertStringData = function(str,type,defaultValue)  {
+  if ((str == "") || (str == null)) {
+    str = defaultValue;
+  }
+  type = type.toLowerCase();
+  switch (type) {
+    case "integer":
+      str = parseFloat(str);
+      break;
+    case "number":
+      str = parseFloat(str);
+      break;
+    case "boolean":
+      str = (str.toLowerCase() == "true");
+      break;
+    case "js":
+      str = eval(str);
+      break;
+  }
+  return str;
+};
+
+/*---------------------FILE_UTILS-------------------*/
+WRUtil.getUrlPath = function(url)  {
+  url = url.split("?")[0];
+  for (var i=url.length-1;i>=0;i--) {
+    if (url.substr(i,1) == "/") {
+      return url.substring(0,i);
+    }
+  }
+  return "";
+};
+
+WRUtil.getUrlPrefix = function(url) {
+  var urlPrefix = "";
+  if (url)  {
+    var url = url.toString();
+    for (var i=0;i<url.length;i++)  {
+      var tmpChar = url.charAt(i);
+      if (tmpChar == ":") {
+        urlPrefix = url.substr(0,i+3);
+        i = url.length;
+      }
+    }
+  }
+  return urlPrefix;
+};
+/*
+WRUtil.getQueryStringValue = function(key,url,queryChar) {
+  var urlPos = -1;
+  var value = "";
+  if (queryChar == null)  {
+    queryChar = "?";
+  }
+  var temp = window.document.location;
+  if (url != null)  {
+    temp = url;
+  }
+  if (temp != "")  {
+    var url = temp.toString();
+    var offset = key.length + 1;
+    if (url.indexOf(queryChar) > -1)  {
+      //get page
+      qs = url.substring(url.indexOf(queryChar) + 1,url.length);
+      urlPos = qs.indexOf(key);
+      if (urlPos > -1)  {
+        value = qs.substring(urlPos+offset,qs.length);
+        if (value.indexOf('&') >= 0)
+          value=value.substring(0,value.indexOf('&'));
+      }
+    }
+  }
+  return value;
+};
+*/
+
+WRUtil.getQueryStringValue = function(key,url) {
+  var qs = url.split("?");
+  if (qs.length == 2) {
+    var pairs = qs[1].split("&");
+    var pair;
+    for (var p in pairs) {
+      pair = pairs[p].split("=");
+      if ((pair.length == 2) && (pair[0] == key)) {
+        return pair[1];
+      }
+    }
+  }
+  return null;
+};
+
+WRUtil.pathChecker = function(path) {
+  if (path.substr(0,7) == "file://") {
+    if (path.substr(9,1) != ":") {
+      if (path.substr(7,2) != "//")  {
+        path = "file:////" + path.substr(7);
+      }
+    }
+  }
+  return path;
+};
+
+WRUtil.getLastFolder = function(path) {
+  for (var i=path.length-1;i>-1;i--) {
+    var tmpChr = path.substr(i,1);
+    if ((tmpChr == "/") || (tmpChr == "\\"))  {
+      return path.substr(i+1);
+    }
+  }
+  return "";
+};
+
+WRUtil.getParentFolder = function(path) {
+  for (var i=path.length-1;i>-1;i--) {
+    var tmpChr = path.substr(i,1);
+    if ((tmpChr == "/") || (tmpChr == "\\"))  {
+      return path.substr(0,i);
+    }
+  }
+  return "";
+};
+
+
+/*---------------------XML_UTILS-------------------*/
+WRUtil.loadXmlFile = function(filePath,showErrors) {
+  var xmlDoc = null;
+  try {
+    xmlDoc = new ActiveXObject("Microsoft.XMLDOM");
+    if (xmlDoc != null) {
+      try {
+        xmlDoc.async=false;
+        xmlDoc.load(filePath);
+        return xmlDoc;
+      }
+      catch(e) {
+        if (showErrors) {
+          alert(e.message);
+        }
+      }
+    }
+  }
+  catch(e)  {
+    xmlDoc = document.implementation.createDocument("","",null);
+    var error = false;
+    if (typeof xmlDoc.load != 'undefined') {
+      try {
+        xmlDoc = document.implementation.createDocument("","",null);
+      }
+      catch(e) {
+        if (showErrors) {
+          alert(e.message);
+        }
+      }
+      if (xmlDoc != null) {
+        try {
+          xmlDoc.async=false;
+          xmlDoc.load(filePath);
+          return xmlDoc;
+        }
+        catch(e) {
+          error = true;
+          if (showErrors) {
+            alert(e.message);
+          }
+        }
+      }
+      else  {
+        error = true;
+      }
+    }
+    else  {
+      error = true;
+    }
+    if (error)  {
+      try {
+        return WRUtil.loadXmlUrl(filePath);
+      }
+      catch(e) {
+        if (showErrors) {
+          alert(e.message);
+        }
+      }
+    }
+  }
+  return null;
+};
+
+WRUtil.loadXmlUrl = function(U) {
+  var X = !window.XMLHttpRequest ? new ActiveXObject('Microsoft.XMLHTTP') : new XMLHttpRequest;
+  X.open('GET', U, false);
+  X.setRequestHeader('Content-Type', 'text/xml');
+  X.send('');
+  return X.responseXML;
+};
+
+WRUtil.createXmlDocFromString = function(xmlStr) {
+  if (WRUtil.IE) {
+    var xml = new ActiveXObject("Microsoft.XMLDOM");
+    xml.loadXML(xmlStr);
+    return xml;
+  }
+  else  {
+    var domParser = new DOMParser();
+    return domParser.parseFromString(xmlStr, "text/xml");
+  }
+};
+
+WRUtil.convertXmlDocToString = function(xml)  {
+  if (WRUtil.IE) {
+    return xml.xml;
+  }
+  else  {
+    var xmlStr = "";
+    var xmlSerializer = new XMLSerializer();
+    xmlStr += xmlSerializer.serializeToString(xml);
+    return xmlStr;
+  }
+};
+
+WRUtil.getNodeTextContent = function(xmlNode,dataType,defaultValue)  {
+  var textName = "textContent";
+  if (WRUtil.IE) {
+    textName = "text";
+  }
+  if (xmlNode)  {
+    var textContent = xmlNode[textName];
+    if ((!textContent) && (textContent.firstChild)) {
+      textContent = textContent[textName];
+    }
+    return WRUtil.convertStringData(textContent,dataType,defaultValue);
+  }
+  return defaultValue;
+};
+
+WRUtil.setNodeTextContent = function(doc, element, value, CDATA) {
+  WRUtil.removeChildNodes(element);
+  if (CDATA) {
+    WRUtil.addCDATANode(doc, element, value);
+  }
+  else {
+    element.appendChild(doc.createTextNode(value));
+  }
+};
+
+WRUtil.addElement = function(doc,parent,elementName) {
+  var element = doc.createElement(elementName);
+  parent.appendChild(element);
+  return element;
+};
+
+WRUtil.addCDATANode = function(doc,element,cData) {
+  element.appendChild(doc.createCDATASection(cData));
+  return element;
+};
+
+WRUtil.getNodeByTagName = function(element,tagName) {
+  for (var c=0;c<element.childNodes.length;c++) {
+    var cNode = element.childNodes[c];
+    if (cNode.nodeName == tagName)  {
+      return cNode;
+    }
+  }
+  return null;
+};
+
+WRUtil.getNodesByTagName = function(element,tagName) {
+  var nodes = new Array();
+  for (var c=0;c<element.childNodes.length;c++) {
+    var cNode = element.childNodes[c];
+    if (cNode.nodeName == tagName)  {
+      nodes.push(cNode);
+    }
+  }
+  return nodes;
+};
+
+WRUtil.getNodeFromNodeListById = function(nodeList,id)  {
+  for (var n=0;n<nodeList.length;n++) {
+    var node = nodeList.item(n);
+    if (node.getAttribute("id") == id)  {
+      return node;
+    }
+  }
+  return null;
+};
+
+WRUtil.removeChildNodes = function(node)  {
+  while (node.hasChildNodes())  {
+    node.removeChild(node.childNodes[0]);
+  }
+};
+
+/*---------------------ARRAY-OBJ_UTILS-------------------*/
+
+WRUtil.concatObjects = function(srcObj,newObj)  {
+  for (var n in newObj) {
+    srcObj[n] = newObj[n];
+  }
+  return srcObj;
+};
+
+WRUtil.convertObjectToArray = function(obj)  {
+  var array = new Array();
+  for (var n in obj)  {
+    array.push(obj[n]);
+  }
+  return array;
+};
+
+WRUtil.itemInArray = function(item,array) {
+  for (i=0;i<array.length;i++)  {
+    if (item == array[i])
+      return true;
+  }
+  return false;
+};
+
+WRUtil.itemIndexInArray = function(item,array) {
+  for (i=0;i<array.length;i++)  {
+    if (item == array[i])
+      return i;
+  }
+  return -1;
+};
+
+WRUtil.removeItemFromArray = function(item,array) {
+  var removed = false;
+  var myArray = new Array()
+  for (i=0;i<array.length;i++)  {
+    if (item != array[i]) {
+      myArray.push(array[i]);
+    }
+    else  {
+      removed = true;
+    }
+  }
+  array = myArray;
+  return removed;
+};
+
+
+/*------------------- Browser WRUtils -------------------------*/
+
+WRUtil.getInternetExplorerVersion = function()  {
+  var rv = -1; // Return value assumes failure.
+  if (navigator.appName == 'Microsoft Internet Explorer')
+  {
+    var ua = navigator.userAgent;
+    var re  = new RegExp("MSIE ([0-9]{1,}[\.0-9]{0,})");
+    if (re.exec(ua) != null)
+      rv = parseFloat( RegExp.$1 );
+  }
+  return rv;
+}
+
+WRUtil.getDocHeight = function() {
+  var D = document;
+  return Math.max(
+    Math.max(D.body.scrollHeight, D.documentElement.scrollHeight),
+    Math.max(D.body.offsetHeight, D.documentElement.offsetHeight),
+    Math.max(D.body.clientHeight, D.documentElement.clientHeight)
+  );
+};
+
+WRUtil.getViewport = function() {
+  var e = window
+    , a = 'inner';
+  if ( !( 'innerWidth' in window ) )
+  {
+    a = 'client';
+    e = document.documentElement || document.body;
+  }
+  return { width : e[ a+'Width' ] , height : e[ a+'Height' ] }
+};
+
+/*------------------- Input WRUtils --------------------------------*/
+WRUtil.validateInput = function(txt,type)  {
+  var valid = false;
+  var filter;
+  switch (type) {
+    case "date" :
+      //filter = /^\d{1,2}\/\d{1,2}\/\d{4}$/;
+      //valid = txt.match(filter);
+      var ms = Date.parse(txt);
+      valid = !isNaN(ms);
+      break;
+    case "email" :
+      filter=/^([\w-]+(?:\.[\w-]+)*)@((?:[\w-]+\.)*\w[\w-]{0,66})\.([a-z]{2,6}(?:\.[a-z]{2})?)$/i;
+      valid = filter.test(txt);
+      break;
+    case "phone" :
+      filter=/^\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/;
+      valid = filter.test(txt);
+      break;
+    case "pwd" :
+      valid = true;
+      break;
+    default:
+      valid = true;
+  }
+  return valid;
+};
+
+WRUtil.getProp = function(node,propName,dataType,defaultValue)  {
+  var prop;
+  if (dataType == "boolean")  {
+    var defVal = "N";
+    if (defaultValue === "true")  {
+      defVal = "Y";
+    }
+    prop = WRUtil.getNodeTextContent(node.getElementsByTagName(propName).item(0),"string",defVal);
+    prop = (prop === "Y");
+  }
+  else  {
+    prop = WRUtil.getNodeTextContent(node.getElementsByTagName(propName).item(0),dataType,defaultValue);
+    if (prop === defaultValue)  {
+      prop = null;
+    }
+  }
+  return prop;
+};
+
+WRUtil.convertBooleanToProp = function(b) {
+  var prop = "N";
+  if (b)  {
+    prop = "Y";
+  }
+  return prop;
+};
+
+WRUtil.validatePwd = function(pwd1,pwd2)  {
+  var result = {
+    success: ((pwd1 != "") && (pwd1 === pwd2)),
+    error: ""
+  };
+  return result;
+};
+
+WRUtil.getMillisecondStr = function(d)  {
+  var ms = (d.getTime() / 1000)+"";
+  if (ms.indexOf(".") === -1)  {
+    ms += ".0";
+  }
+  return ms;
+};
+
+WRUtil.getPropStringValue = function(prop,defaultStr) {
+  if (prop == null) {
+    return defaultStr;
+  }
+  else  {
+    return prop.toString();
+  }
+};
+
+WRUtil.validateDateInput = function(element,dateStr)  {
+  if ((dateStr != "") && (!WRUtil.validateInput(dateStr,"date")))  {
+    alert("Unable to parse the date, please input using MM/DD/YYYY");
+    if (element != null)  {
+      element.value = "";
+      element.focus();
+    }
+    return false;
+  }
+  return true;
+};
+
+WRUtil.exitFS = function()  {
+  if (document.cancelFullScreen) {
+    document.cancelFullScreen();
+  } else if (document.mozCancelFullScreen) {
+    document.mozCancelFullScreen();
+  } else if (document.webkitCancelFullScreen) {
+    document.webkitCancelFullScreen();
+  }
+};
+
+WRUtil.htmlDecode = function(input) {
+  var e = document.createElement('div');
+  e.innerHTML = input;
+  return e.childNodes[0].nodeValue;
+};
+
+WRUtil.getMonthStr = function(num, lang) {
+  if (lang == null) {
+    lang = "en";
+  }
+  var months = {
+    "en": ["January","February","March","April","May","June","July","August","September","October","November","December"],
+    "es": ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
+  };
+  return months[lang][num-1];
+};
+
+WRUtil.getUUID = function() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+WRUtil.getXmlHttp = function() {
+  try {
+    var x = new XMLHttpRequest();
+  }
+  catch (e) {
+    var x = new ActiveXObject("Microsoft.XMLHTTP");
+  }
+  return x;
+};
+
+WRUtil.saveFile = function (url, params, async, caller, handler) {
+  if (async == null)  {
+    async = false;
+  }
+  if (params == null) {
+    params = "v2=" + WRUtil.getTime();
+  }
+  else {
+    params += "&v2=" + WRUtil.getTime();
+  }
+  var xmlHttp = WRUtil.getXmlHttp();
+  if (async)  {
+    xmlHttp.onreadystatechange = function() {
+      if (xmlHttp.readyState == 4) {
+        var success = (xmlHttp.responseText == "true");
+        var error = "";
+        if (!success) {
+          error = xmlHttp.responseText;
+        }
+        var responseObj = {
+          success: success,
+          error: error
+        };
+        handler(caller, responseObj);
+      }
+    };
+  }
+  xmlHttp.open("POST", url, async);
+  xmlHttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+  xmlHttp.send(params);
+  if (!async) {
+    var success = (xmlHttp.responseText == "true");
+    var error = "";
+    if (!success) {
+      error = xmlHttp.responseText;
+    }
+    var responseObj = {
+      success: success,
+      error: error
+    };
+    return responseObj;
+  }
+};
+
+WRUtil.getTime = function()  {
+  var tmp = new Date();
+  return tmp.getTime();
+};
+
+WRUtil.userAgent = navigator.userAgent || navigator.vendor || window.opera;
+WRUtil.IE = ((navigator.appName.indexOf("Microsoft") != -1) || (WRUtil.userAgent.indexOf("Trident") != -1));
+WRUtil.ieVersion = WRUtil.getInternetExplorerVersion();
+WRUtil.urlPrefix = WRUtil.getUrlPrefix(window.location.href);
+WRUtil.useHttps = false;
+if (WRUtil.urlPrefix == "https://") { WRUtil.useHttps = true; }
+
+WRUtil.iOS = (WRUtil.userAgent.match( /iPad/i ) || WRUtil.userAgent.match( /iPhone/i ) || WRUtil.userAgent.match( /iPod/i ));
+WRUtil.android = (WRUtil.userAgent.match( /Android/i ));
+WRUtil.chrome = (WRUtil.userAgent.match( /Chrome/i ));
+WRUtil.safari = ((WRUtil.userAgent.match( /Safari/i )) && (!WRUtil.chrome));
+
+//add HTML5 tags for IE 7 and 9
+if ((WRUtil.isIE) && (!WRUtil.ieVersion < 9)) {
+  //add HTML element tags
+  document.createElement('header');
+  document.createElement('hgroup');
+  document.createElement('nav');
+  document.createElement('menu');
+  document.createElement('section');
+  document.createElement('article');
+  document.createElement('aside');
+  document.createElement('footer');
+}

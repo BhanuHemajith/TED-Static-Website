@@ -1,0 +1,68 @@
+function DWLocalStorage(id, useLocalStorage) {
+  this.id = "dw_storage_" + id;
+  this.localStorage = window.sessionStorage;
+  if (useLocalStorage) {
+    this.localStorage = window.localStorage;
+  }
+  this.initialized = DWLocalStorage.isAvailable(this.localStorage);
+  this.values = {};
+}
+
+DWLocalStorage.prototype.setId = function(id) {
+  this.id = "dw_storage_" + id;
+};
+
+DWLocalStorage.prototype.setValue = function(key, value) {
+  this.values[key] = value;
+  if (this.initialized) {
+    this.localStorage.setItem(this.id, JSON.stringify(this.values));
+  }
+};
+
+DWLocalStorage.prototype.getValue = function(key) {
+  var value = this.values[key];
+  if ((value == null) && (this.initialized)) {
+    var values = this.localStorage.getItem(this.id);
+    if (values != null) {
+      this.values = JSON.parse(values);
+      value = this.values[key];
+    }    
+  }
+  return value;
+};
+
+DWLocalStorage.prototype.clear = function(key) {
+  this.values[key] = null;
+  if (this.initialized) {
+    this.localStorage.setItem(this.id, JSON.stringify(this.values));
+  }
+};
+
+DWLocalStorage.prototype.removeStorage = function() {
+  if (this.initialized) {
+    this.localStorage.setItem(this.id, JSON.stringify({}));
+  }
+};
+
+DWLocalStorage.isAvailable = function(storage) {
+    try {
+        var x = '__storage_test__';
+        storage.setItem(x, x);
+        storage.removeItem(x);
+        return true;
+    }
+    catch(e) {
+        return e instanceof DOMException && (
+            // everything except Firefox
+            e.code === 22 ||
+            // Firefox
+            e.code === 1014 ||
+            // test name field too, because code might not be present
+            // everything except Firefox
+            e.name === 'QuotaExceededError' ||
+            // Firefox
+            e.name === 'NS_ERROR_DOM_QUOTA_REACHED') &&
+            // acknowledge QuotaExceededError only if there's something already stored
+            (storage && storage.length !== 0);
+    }
+};

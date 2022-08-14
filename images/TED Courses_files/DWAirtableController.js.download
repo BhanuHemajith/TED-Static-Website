@@ -1,0 +1,256 @@
+DWAirtableController.prototype = new WRDBInterface();
+
+function DWAirtableController(apiUrl, authController, emailController) {
+  WRDBInterface.apply(this, arguments);
+  this.id = "ted_airtable"
+  this.authController = authController;
+  this.emailController = emailController;
+  this.localStorage = new DWLocalStorage(this.id, true);
+  this.urls = {
+    "courseInfo": apiUrl + "/airtable/getCourseInfo.php",
+    "addOrder": apiUrl + "/airtable/addOrder.php",
+    "getLastModifiedTime": apiUrl + "/airtable/getLastModifiedTime.php"
+  };
+  this.courses = {};
+
+  var pThis = this;
+  window.addEventListener('ASSETS_LOADED', function(e) {
+    //console.log('ASSETS LOADED');
+    //pThis.loadCourses('remote');
+    /*
+    pThis.getLastModifiedTime('Courses', function(table, result) {
+      var loadMethod = pThis.localStorage.getValue('Courses') == null ? 'remote' : 'local';
+      var updatedTime = pThis.localStorage.getValue('Courses_updated') == null ? new Date('1/1/1900') : new Date(pThis.localStorage.getValue('Courses_updated'));
+      if ((result != null) && (result.success)) {
+        var modifiedTime = new Date(result.response);
+        if (modifiedTime > updatedTime) {
+          loadMethod = 'remote';
+        }
+      }
+      pThis.loadCourses(loadMethod);
+    });
+    */
+  });
+
+  window.addEventListener('COURSES_LOADED', function(e) {
+    console.log('COURSES LOADED', e.courses);
+  });
+
+}
+
+DWAirtableController.prototype.loadCourses = function(loadMethod, method) {
+  var pThis = this;
+  console.log('LOAD METHOD', loadMethod);
+  if (loadMethod == 'local') {
+    this.courses = JSON.parse(this.localStorage.getValue('Courses'));
+    this.dispatchCourses(method);
+  }
+  else if (loadMethod == 'remote') {
+    this.getCourses(function(result){
+      if ((result != null) && (result.success) && (result.response != null)) {
+        console.log(result.response);
+        pThis.courses = pThis.parseCourses(result.response.records);
+        pThis.localStorage.setValue('Courses', JSON.stringify(pThis.courses));
+        pThis.localStorage.setValue('Courses_updated', new Date());
+      }
+      pThis.dispatchCourses(method);
+    });
+  }
+};
+
+DWAirtableController.prototype.dispatchCourses = function(method) {
+  if (method != null) {
+    method(this.courses);
+  }
+  this.dispatch('COURSES_LOADED', this.courses);
+  var event = new Event('COURSES_LOADED');
+  event.courses = this.courses;
+  window.dispatchEvent(event);
+};
+
+DWAirtableController.prototype.parseCourses = function(records) {
+  var courses = {};
+  if ((records != null) && (records.length > 0)) {    
+    var course, courseRun;
+    for (var r in records) {
+      course = {
+        id: records[r].id,
+        name: records[r].fields['Name'],
+        courseRuns: []
+      };
+      if ((records[r].fields['Course Runs'] != null) && (records[r].fields['Course Runs'].length > 0)) {
+        for (c = 0;c<=records[r].fields['Course Runs'].length;c++) {
+          if (records[r].fields['Course Runs'][c] != null) {
+            courseRun = {
+              id: records[r].fields['Course Runs'][c],
+              name: records[r].fields['Course Run Names'][c],
+              startDate: new Date(records[r].fields['Course Run Dates'][c])
+            }
+            course.courseRuns.push(courseRun);
+          }          
+        }
+      }
+      courses[course.name] = course;
+    }
+  }
+  return courses;
+};
+
+DWAirtableController.prototype.getLastModifiedTime = function(table, method) {
+  this.sendRequest(this.urls['getLastModifiedTime'],[['table',encodeURIComponent(table)]], this, function(caller, result) {
+    //console.log(result);
+    if (method != null) {
+      method(table, result);
+    }
+  });
+};
+
+DWAirtableController.prototype.getCourses = function(method) {
+  this.sendRequest(this.urls['courseInfo'],[['request',encodeURIComponent('Courses')]], this, function(caller, result) {
+    console.log(result);
+    if (method != null) {
+      method(result);
+    }
+    caller.dispatch('COURSES', result);
+  });
+};
+
+DWAirtableController.prototype.getCourseRuns = function(method) {
+  this.sendRequest(this.urls['courseInfo'],[['request',encodeURIComponent("Course Runs")]], this, function(caller, result) {
+    console.log(result);
+    if (method != null) {
+      method(result);
+    }
+    caller.dispatch('COURSERUNS', result);
+  });
+}; 
+
+DWAirtableController.prototype.getCourseRunsByCourse = function(courseName, method) {
+  if (courseName != null) {
+    courseName = '';
+  }
+  this.sendRequest(this.urls['courseInfo'],[['request',encodeURIComponent("Course Runs")],['filter',"%7BCourse+Name%7D%3D'"+courseName+"'"]], this, function(caller, result) {
+    console.log(result);
+    if (method != null) {
+      method(result.response);
+    }
+    result.courseName = courseName;
+    caller.dispatch('COURSERUNSBYCOURSE', result);
+  });
+};
+
+DWAirtableController.prototype.addOrder = function(orderData, method) {
+  if ((orderData != null) && (orderData.courses != null) && (orderData.courses.length > 0)) {
+    orderData.profile = this.authController.profile;
+    console.log('orderData', orderData);
+    /*
+    this.sendJSONRequest(this.urls.addOrder,orderData,this,function(pThis, result) {
+      if ((result != null) && (result.success)) {
+        pThis.emailController.savePurchase(orderData, method);
+      }
+      else if (method) {
+        method(result);
+      }
+    });
+    */
+  }
+};
+
+DWAirtableController.prototype.sendJSONRequest = function(url,json,caller,handler) {
+  //params = encodeURIComponent(params);
+  //console.log("get", url + "?" + params);
+  var xmlHttp = DWAirtableController.getXmlHttp();
+  xmlHttp.onreadystatechange = function() {
+    if (xmlHttp.readyState == 4) {
+      //console.log("response", xmlHttp.responseText);
+      var result = JSON.parse(decodeURIComponent(xmlHttp.responseText));
+      //console.log(result);
+      if (result == null) {
+        result = {
+          success: false,
+          error: 'unknown'
+        };
+      }
+      handler(caller, result);
+    }
+    else  {
+      //statusTxt += ".";
+      //updateStatus(statusTxt);
+    }
+  };
+
+  var jsonStr = JSON.stringify(json);
+  if (jsonStr != null) {
+    var params = "apiToken="+this.authController.APIToken+"&json="+jsonStr;
+    //console.log(params);
+    xmlHttp.open('POST', url, true);
+    xmlHttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    //xmlHttp.setRequestHeader("Content-length", params.length);
+    //xmlHttp.setRequestHeader("Connection", "close");
+    //alert(params);
+    xmlHttp.send(params);
+  }
+  else {
+    console.log("ERROR","JSON invalid");
+  }
+  
+};
+
+DWAirtableController.prototype.sendRequest = function(url,params,caller,handler) {
+  var xmlHttp = DWAirtableController.getXmlHttp();
+  xmlHttp.onreadystatechange = function() {
+    if (xmlHttp.readyState == 4) {
+      //console.log("response", xmlHttp.responseText);
+      
+      var result = JSON.parse(decodeURIComponent(xmlHttp.responseText));
+      //console.log(result);
+      if (result == null) {
+        result = {
+          success: false,
+          error: 'unknown'
+        };
+      }
+      handler(caller, result);
+    }
+    else  {
+      //statusTxt += ".";
+      //updateStatus(statusTxt);
+    }
+  };
+
+  if (params == null) {
+    params = [];
+  }
+  params.push(["apiToken",this.authController.APIToken]);
+  if ((this.authController.accessToken != null) && (this.authController.sessionId != null)) {
+    params.push(["TEDSession", encodeURIComponent(this.authController.sessionId)]);
+    params.push(["accessToken", this.authController.accessToken]);
+  }
+  for (var p in params) {
+    params[p] = params[p].join("=");
+  }
+  var qs = params.join("&");
+  if (qs != null) {
+    //console.log(qs);
+    xmlHttp.open('POST', url, true);
+    xmlHttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    //xmlHttp.setRequestHeader("Content-length", params.length);
+    //xmlHttp.setRequestHeader("Connection", "close");
+    //alert(params);
+    xmlHttp.send(qs);
+  }
+  else {
+    console.log("ERROR","JSON invalid");
+  }
+  
+};
+
+try {
+  Object.assign(DWAirtableController, WRDBInterface);
+}
+catch(e) {
+  objCopy(DWAirtableController, WRDBInterface);
+}
+
+var dwAirtableController = new DWAirtableController(apiUrl, dwTEDAuthController, dwMailChimpController);
+
